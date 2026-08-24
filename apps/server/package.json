@@ -1,0 +1,29 @@
+{
+  "name": "@teamspace/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node-pg-migrate up -m db/migrations --envPath .env",
+    "db:seed": "tsx db/seed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/pg": "^8.23.1",
+    "node-pg-migrate": "^9.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.12.1",
+    "fastify-plugin": "^6.0.0",
+    "pg": "^8.23.0",
+    "zod": "^4.4.3"
+  }
+}
