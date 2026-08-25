@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import multipart from "@fastify/multipart";
 import websocketRoute from "./routes/websocket.js";
 import databasePlugin from "./plugins/database.js";
 import healthRoute from "./routes/health.js";
@@ -31,10 +32,23 @@ import searchMessagesRoute from "./routes/search-messages.js";
 
 import createReplyRoute from "./routes/messages/create-reply.js";
 import repliesRoute from "./routes/messages/replies.js";
-export const buildApp = () => {
+
+
+import uploadAttachmentRoute from "./routes/messages/upload-attachment.js";
+import downloadAttachmentRoute from "./routes/messages/download-attachment.js";
+
+
+export const buildApp = async () => {
   const app = Fastify({
     logger: true,
   });
+
+  await app.register(multipart, {
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+        files: 5,
+      },
+    });
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error(error);
@@ -67,6 +81,8 @@ export const buildApp = () => {
         message,
       },
     });
+
+    
   });
 
   app.register(databasePlugin);
@@ -98,6 +114,8 @@ export const buildApp = () => {
   app.register(searchMessagesRoute);
   app.register(createReplyRoute);
   app.register(repliesRoute);
-
+  app.register(uploadAttachmentRoute);
+  app.register(downloadAttachmentRoute);
+  
   return app;
 };
