@@ -27,6 +27,7 @@ import conversationsListRoute from "./routes/conversations-list.js";
 import conversationsMessagesRoute from "./routes/conversations-messages.js";
 import conversationsMessagesListRoute from "./routes/conversations-messages-list.js";
 import markDirectMessageReadRoute from "./routes/conversations/mark-direct-message-read.js";
+import searchMessagesRoute from "./routes/search-messages.js";
 
 export const buildApp = () => {
   const app = Fastify({
@@ -92,6 +93,7 @@ export const buildApp = () => {
   app.register(conversationsMessagesRoute);
   app.register(conversationsMessagesListRoute);
   app.register(markDirectMessageReadRoute);
+  app.register(searchMessagesRoute);
 
   return app;
 };
