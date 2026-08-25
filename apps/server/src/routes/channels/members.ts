@@ -100,18 +100,36 @@ const channelMembersRoute: FastifyPluginAsync = async (app) => {
       // Only OWNER / ADMIN can manage channel members
       // ============================================
 
-      if (
-        requesterMembership.role !== "OWNER" &&
-        requesterMembership.role !== "ADMIN"
-      ) {
-        return reply.status(403).send({
-          error: {
-            code: "INSUFFICIENT_PERMISSIONS",
-            message:
-              "Only workspace owners and admins can manage channel members",
-          },
-        });
-      }
+      const requesterChannelRole = await app.db.query(
+  `
+  SELECT role
+  FROM channel_members
+  WHERE channel_id = $1
+    AND user_id = (
+      SELECT id
+      FROM users
+      WHERE auth_user_id = $2
+    )
+  `,
+  [channelId, request.user!.id],
+);
+
+const channelRole = requesterChannelRole.rows[0]?.role;
+
+const canManageMembers =
+  requesterMembership.role === "OWNER" ||
+  requesterMembership.role === "ADMIN" ||
+  channelRole === "CHANNEL_MANAGER";
+
+if (!canManageMembers) {
+  return reply.status(403).send({
+    error: {
+      code: "INSUFFICIENT_PERMISSIONS",
+      message:
+        "Only workspace owners, admins, and channel managers can manage channel members",
+    },
+  });
+}
 
       // ============================================
       // Target user must exist
@@ -279,22 +297,40 @@ const channelMembersRoute: FastifyPluginAsync = async (app) => {
         });
       }
 
-      // ============================================
-      // Only OWNER / ADMIN can remove members
-      // ============================================
+     // ============================================
+// OWNER / ADMIN / CHANNEL_MANAGER can remove members
+// ============================================
 
-      if (
-        requesterMembership.role !== "OWNER" &&
-        requesterMembership.role !== "ADMIN"
-      ) {
-        return reply.status(403).send({
-          error: {
-            code: "INSUFFICIENT_PERMISSIONS",
-            message:
-              "Only workspace owners and admins can manage channel members",
-          },
-        });
-      }
+const requesterChannelRole = await app.db.query(
+  `
+  SELECT role
+  FROM channel_members
+  WHERE channel_id = $1
+    AND user_id = (
+      SELECT id
+      FROM users
+      WHERE auth_user_id = $2
+    )
+  `,
+  [channelId, request.user!.id],
+);
+
+const channelRole = requesterChannelRole.rows[0]?.role;
+
+const canManageMembers =
+  requesterMembership.role === "OWNER" ||
+  requesterMembership.role === "ADMIN" ||
+  channelRole === "CHANNEL_MANAGER";
+
+if (!canManageMembers) {
+  return reply.status(403).send({
+    error: {
+      code: "INSUFFICIENT_PERMISSIONS",
+      message:
+        "Only workspace owners, admins, and channel managers can manage channel members",
+    },
+  });
+}
 
       // ============================================
       // Prevent removing the channel creator
@@ -356,6 +392,180 @@ const channelMembersRoute: FastifyPluginAsync = async (app) => {
       };
     },
   );
+
+    app.patch(
+    "/api/channels/:channelId/members/:userId/role",
+    { config: { requiresAuth: true } },
+    async (request, reply) => {
+      const paramsSchema = z.object({
+        channelId: z.uuid(),
+        userId: z.uuid(),
+      });
+
+      const bodySchema = z.object({
+        role: z.enum(["MEMBER", "CHANNEL_MANAGER"]),
+      });
+
+      const parsedParams = paramsSchema.safeParse(request.params);
+
+      if (!parsedParams.success) {
+        return reply.status(400).send({
+          error: {
+            code: "INVALID_PARAMETERS",
+            message: "Channel ID and user ID must be valid UUIDs",
+          },
+        });
+      }
+
+      const parsedBody = bodySchema.safeParse(request.body);
+
+      if (!parsedBody.success) {
+        return reply.status(400).send({
+          error: {
+            code: "INVALID_ROLE",
+            message:
+              "Role must be MEMBER or CHANNEL_MANAGER",
+          },
+        });
+      }
+
+      const { channelId, userId } = parsedParams.data;
+      const { role } = parsedBody.data;
+
+      // ============================================
+      // Find channel
+      // ============================================
+
+      const channelResult = await app.db.query(
+        `
+        SELECT
+          id,
+          workspace_id,
+          created_by
+        FROM channels
+        WHERE id = $1
+        `,
+        [channelId],
+      );
+
+      const channel = channelResult.rows[0];
+
+      if (!channel) {
+        return reply.status(404).send({
+          error: {
+            code: "CHANNEL_NOT_FOUND",
+            message: "Channel not found",
+          },
+        });
+      }
+
+      // ============================================
+      // Verify requester workspace membership
+      // ============================================
+
+      const requesterMembership =
+        await getWorkspaceMembership(
+          app,
+          request,
+          channel.workspace_id,
+        );
+
+      if (!requesterMembership) {
+        return reply.status(403).send({
+          error: {
+            code: "WORKSPACE_ACCESS_DENIED",
+            message:
+              "You are not a member of this workspace",
+          },
+        });
+      }
+
+      // ============================================
+      // Only OWNER / ADMIN can manage channel roles
+      // ============================================
+
+      if (
+        requesterMembership.role !== "OWNER" &&
+        requesterMembership.role !== "ADMIN"
+      ) {
+        return reply.status(403).send({
+          error: {
+            code: "INSUFFICIENT_PERMISSIONS",
+            message:
+              "Only workspace owners and admins can manage channel roles",
+          },
+        });
+      }
+
+      // ============================================
+      // Verify target is a channel member
+      // ============================================
+
+      const memberResult = await app.db.query(
+        `
+        SELECT
+          id,
+          user_id,
+          role
+        FROM channel_members
+        WHERE channel_id = $1
+          AND user_id = $2
+        `,
+        [channelId, userId],
+      );
+
+      const member = memberResult.rows[0];
+
+      if (!member) {
+        return reply.status(404).send({
+          error: {
+            code: "CHANNEL_MEMBER_NOT_FOUND",
+            message:
+              "User is not a member of this channel",
+          },
+        });
+      }
+
+      // ============================================
+      // Prevent changing channel creator role
+      // ============================================
+
+      if (channel.created_by === userId) {
+        return reply.status(400).send({
+          error: {
+            code: "CHANNEL_CREATOR_ROLE_PROTECTED",
+            message:
+              "The channel creator's role cannot be changed",
+          },
+        });
+      }
+
+      // ============================================
+      // Update role
+      // ============================================
+
+      const result = await app.db.query(
+        `
+        UPDATE channel_members
+        SET role = $1
+        WHERE channel_id = $2
+          AND user_id = $3
+        RETURNING
+          id,
+          channel_id,
+          user_id,
+          role,
+          joined_at
+        `,
+        [role, channelId, userId],
+      );
+
+      return {
+        data: result.rows[0],
+      };
+    },
+  );
 };
+
 
 export default channelMembersRoute;

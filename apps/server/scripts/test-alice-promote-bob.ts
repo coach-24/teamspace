@@ -2,18 +2,18 @@ import "dotenv/config";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
-const BOB_PASSWORD = process.env.TEST_PASSWORD!;
+const ALICE_PASSWORD = process.env.TEST_PASSWORD!;
 
 const API_URL = "http://127.0.0.1:4000";
 
 const channelId =
   "02451e5a-74bf-448a-a038-fae32cd6b9c4";
 
-const charlieUserId =
-  "936c9de4-283b-4a0f-b6aa-e810de7cd7c8";
+const bobUserId =
+  "23498c3d-1077-4abb-8d7c-ea5e48f29aae";
 
 const main = async () => {
-  console.log("🔐 Logging in as Bob...");
+  console.log("🔐 Logging in as Alice...");
 
   const loginResponse = await fetch(
     `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
@@ -24,8 +24,8 @@ const main = async () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email: "bob@teamspace.dev",
-        password: BOB_PASSWORD,
+        email: "alice@teamspace.dev",
+        password: ALICE_PASSWORD,
       }),
     },
   );
@@ -33,26 +33,25 @@ const main = async () => {
   const loginData = await loginResponse.json();
 
   if (!loginResponse.ok) {
-    console.error("❌ Bob login failed:");
+    console.error("❌ Alice login failed:");
     console.error(loginData);
     process.exit(1);
   }
 
-  console.log("✅ Bob logged in.");
-  console.log("👤 User:", loginData.user?.email);
+  console.log("✅ Alice logged in.");
 
-  console.log("\n👑 Bob is trying to add Charlie...");
+  console.log("\n👑 Promoting Bob to CHANNEL_MANAGER...");
 
   const response = await fetch(
-    `${API_URL}/api/channels/${channelId}/members`,
+    `${API_URL}/api/channels/${channelId}/members/${bobUserId}/role`,
     {
-      method: "POST",
+      method: "PATCH",
       headers: {
         Authorization: `Bearer ${loginData.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        userId: charlieUserId,
+        role: "CHANNEL_MANAGER",
       }),
     },
   );
@@ -67,17 +66,13 @@ const main = async () => {
     JSON.stringify(result, null, 2),
   );
 
-  if (response.status === 201) {
-    console.log(
-      "\n🎉 CHANNEL MANAGER ADD MEMBER PASSED!",
-    );
-    console.log(
-      "Bob successfully added Charlie to the channel.",
-    );
+  if (
+    response.status === 200 &&
+    result?.data?.role === "CHANNEL_MANAGER"
+  ) {
+    console.log("\n🎉 CHANNEL MANAGER PROMOTION PASSED!");
   } else {
-    console.log(
-      "\n❌ CHANNEL MANAGER ADD MEMBER FAILED.",
-    );
+    console.log("\n❌ CHANNEL MANAGER PROMOTION FAILED.");
     process.exit(1);
   }
 };

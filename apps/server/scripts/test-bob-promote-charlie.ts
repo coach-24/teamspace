@@ -39,20 +39,21 @@ const main = async () => {
   }
 
   console.log("✅ Bob logged in.");
-  console.log("👤 User:", loginData.user?.email);
 
-  console.log("\n👑 Bob is trying to add Charlie...");
+  console.log(
+    "\n🚫 Bob is trying to promote Charlie...",
+  );
 
   const response = await fetch(
-    `${API_URL}/api/channels/${channelId}/members`,
+    `${API_URL}/api/channels/${channelId}/members/${charlieUserId}/role`,
     {
-      method: "POST",
+      method: "PATCH",
       headers: {
         Authorization: `Bearer ${loginData.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        userId: charlieUserId,
+        role: "CHANNEL_MANAGER",
       }),
     },
   );
@@ -67,16 +68,19 @@ const main = async () => {
     JSON.stringify(result, null, 2),
   );
 
-  if (response.status === 201) {
+  if (
+    response.status === 403 &&
+    result?.error?.code === "INSUFFICIENT_PERMISSIONS"
+  ) {
     console.log(
-      "\n🎉 CHANNEL MANAGER ADD MEMBER PASSED!",
+      "\n🎉 CHANNEL ROLE ESCALATION TEST PASSED!",
     );
     console.log(
-      "Bob successfully added Charlie to the channel.",
+      "Bob cannot promote another channel manager.",
     );
   } else {
     console.log(
-      "\n❌ CHANNEL MANAGER ADD MEMBER FAILED.",
+      "\n❌ CHANNEL ROLE ESCALATION TEST FAILED.",
     );
     process.exit(1);
   }
