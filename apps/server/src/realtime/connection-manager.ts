@@ -39,6 +39,23 @@ class ConnectionManager {
     return this.connections.get(socket)?.userId;
   }
 
+  remove(socket: WebSocket) {
+    this.connections.delete(socket);
+  }
+
+  joinChannel(
+    socket: WebSocket,
+    channelId: string,
+  ) {
+    const connection = this.connections.get(socket);
+
+    if (!connection) {
+      return;
+    }
+
+    connection.channels.add(channelId);
+  }
+
   broadcastToUser(
     userId: string,
     message: unknown,
@@ -58,7 +75,7 @@ class ConnectionManager {
     }
   }
 
-    broadcastToOthers(
+  broadcastToOthers(
     userId: string,
     message: unknown,
   ) {
@@ -75,23 +92,6 @@ class ConnectionManager {
 
       connection.socket.send(payload);
     }
-  }
-
-  remove(socket: WebSocket) {
-    this.connections.delete(socket);
-  }
-
-  joinChannel(
-    socket: WebSocket,
-    channelId: string,
-  ) {
-    const connection = this.connections.get(socket);
-
-    if (!connection) {
-      return;
-    }
-
-    connection.channels.add(channelId);
   }
 
   broadcastToChannel(

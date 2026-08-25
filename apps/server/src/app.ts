@@ -22,7 +22,11 @@ import markMessageReadRoute from "./routes/channels/mark-message-read.js";
 import notificationsRoute from "./routes/notifications.js";
 import notificationsReadRoute from "./routes/notifications-read.js";
 import notificationsUnreadCountRoute from "./routes/notifications-unread-count.js";
-
+import conversationsRoute from "./routes/conversations.js";
+import conversationsListRoute from "./routes/conversations-list.js";
+import conversationsMessagesRoute from "./routes/conversations-messages.js";
+import conversationsMessagesListRoute from "./routes/conversations-messages-list.js";
+import markDirectMessageReadRoute from "./routes/conversations/mark-direct-message-read.js";
 
 export const buildApp = () => {
   const app = Fastify({
@@ -83,6 +87,11 @@ export const buildApp = () => {
   app.register(notificationsUnreadCountRoute);
   app.register(websocketRoute);
   app.register(markMessageReadRoute);
+  app.register(conversationsRoute);
+  app.register(conversationsListRoute);
+  app.register(conversationsMessagesRoute);
+  app.register(conversationsMessagesListRoute);
+  app.register(markDirectMessageReadRoute);
 
   return app;
 };
