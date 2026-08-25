@@ -38,6 +38,7 @@ import uploadAttachmentRoute from "./routes/messages/upload-attachment.js";
 import downloadAttachmentRoute from "./routes/messages/download-attachment.js";
 
 import presenceRoute from "./routes/presence.js";
+import searchUsersRoute from "./routes/search-users.js";
 
 export const buildApp = async () => {
   const app = Fastify({
@@ -118,6 +119,7 @@ export const buildApp = async () => {
   app.register(uploadAttachmentRoute);
   app.register(downloadAttachmentRoute);
   app.register(presenceRoute);
+  app.register(searchUsersRoute);
   
   return app;
 };
