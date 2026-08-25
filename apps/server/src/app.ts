@@ -6,6 +6,9 @@ import workspaceDetailRoute from "./routes/workspaces/workspace.js";
 import channelsRoute from "./routes/workspaces/channels.js";
 import messagesRoute from "./routes/channels/messages.js";
 import createMessageRoute from "./routes/channels/create-message.js";
+import editMessageRoute from "./routes/channels/edit-message.js";
+import deleteMessageRoute from "./routes/channels/delete-message.js";
+
 import authPlugin from "./plugins/auth.js";
 import membersRoute from "./routes/workspaces/members.js";
 import channelRoute from "./routes/channels/channel.js";
@@ -62,6 +65,8 @@ export const buildApp = () => {
   app.register(channelMembersRoute);
   app.register(messagesRoute);
   app.register(createMessageRoute);
+  app.register(editMessageRoute);
+  app.register(deleteMessageRoute);
 
   return app;
 };
