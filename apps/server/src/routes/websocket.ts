@@ -104,6 +104,15 @@ const websocketRoute: FastifyPluginAsync = async (app) => {
       // ============================================
 
       if (existingConnections === 0) {
+                await app.db.query(
+        `
+        UPDATE users
+        SET last_seen_at = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+        `,
+        [user.id],
+        );
         connectionManager.broadcastToOthers(
           user.id,
           {
@@ -446,7 +455,7 @@ const { channelId } = parsed.data;
       // Handle disconnect
       // ============================================
 
-      socket.on("close", () => {
+      socket.on("close", async () => {
         const connectionCount =
           connectionManager.getUserConnectionCount(
             user.id,
@@ -456,19 +465,31 @@ const { channelId } = parsed.data;
 
         // User's last connection closed
         if (connectionCount === 1) {
-          connectionManager.broadcastToOthers(
-            user.id,
-            {
-              type: "presence.offline",
-              user: {
-                id: user.id,
-                display_name:
-                  user.display_name,
-                email: user.email,
-              },
-            },
-          );
-        }
+  const lastSeenAt = new Date();
+
+  await app.db.query(
+    `
+    UPDATE users
+    SET last_seen_at = $1,
+        updated_at = NOW()
+    WHERE id = $2
+    `,
+    [lastSeenAt, user.id],
+  );
+
+  connectionManager.broadcastToOthers(
+    user.id,
+    {
+      type: "presence.offline",
+      user: {
+        id: user.id,
+        display_name: user.display_name,
+        email: user.email,
+        last_seen_at: lastSeenAt,
+      },
+    },
+  );
+}
 
         console.log(
           `🔌 WebSocket disconnected: ${user.email}`,
