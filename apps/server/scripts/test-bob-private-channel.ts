@@ -2,14 +2,12 @@ import "dotenv/config";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!;
+const BOB_PASSWORD = process.env.TEST_PASSWORD!;
 
 const API_URL = "http://127.0.0.1:4000";
 
-const workspaceId = "8a60cb7b-78e5-4b25-8e96-b8ce74583cf1";
-const charlieUserId = "936c9de4-283b-4a0f-b6aa-e810de7cd7c8";
-
-const email = "bob@teamspace.dev";
-const password = process.env.TEST_PASSWORD;
+const channelId =
+  "02451e5a-74bf-448a-a038-fae32cd6b9c4";
 
 const main = async () => {
   console.log("🔐 Logging in as Bob...");
@@ -23,8 +21,8 @@ const main = async () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email,
-        password,
+        email: "bob@teamspace.dev",
+        password: BOB_PASSWORD,
       }),
     },
   );
@@ -37,29 +35,16 @@ const main = async () => {
     process.exit(1);
   }
 
-  const accessToken = loginData.access_token;
-
-  if (!accessToken) {
-    console.error("❌ No access token returned.");
-    process.exit(1);
-  }
-
-  console.log("✅ Bob logged in successfully.");
+  console.log("✅ Bob logged in.");
   console.log("👤 User:", loginData.user?.email);
 
-  console.log("\n🚀 Bob is trying to add Charlie...");
-
   const response = await fetch(
-    `${API_URL}/api/workspaces/${workspaceId}/members`,
+    `${API_URL}/api/channels/${channelId}`,
     {
-      method: "POST",
+      method: "GET",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
+        Authorization: `Bearer ${loginData.access_token}`,
       },
-      body: JSON.stringify({
-        userId: charlieUserId,
-      }),
     },
   );
 
@@ -68,16 +53,20 @@ const main = async () => {
   console.log("\n📡 API Response");
   console.log("======================");
   console.log("HTTP Status:", response.status);
-  console.log("Response:", JSON.stringify(result, null, 2));
+  console.log(
+    "Response:",
+    JSON.stringify(result, null, 2),
+  );
 
   if (
     response.status === 403 &&
-    result?.error?.code === "INSUFFICIENT_PERMISSIONS"
+    result?.error?.code === "CHANNEL_ACCESS_DENIED"
   ) {
-    console.log("\n🎉 RBAC TEST PASSED!");
-    console.log("Bob is MEMBER and cannot add members.");
+    console.log("\n🎉 PRIVATE CHANNEL RBAC PASSED!");
+    console.log("Bob cannot access Alice's private channel.");
   } else {
-    console.log("\n❌ RBAC TEST FAILED.");
+    console.log("\n❌ PRIVATE CHANNEL RBAC FAILED.");
+    process.exit(1);
   }
 };
 

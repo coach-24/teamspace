@@ -184,60 +184,91 @@ const channelsRoute: FastifyPluginAsync = async (app) => {
       // --------------------------------------------
 
       try {
-        const result = await app.db.query(
-          `
-          INSERT INTO channels (
-            workspace_id,
-            name,
-            slug,
-            description,
-            is_private,
-            created_by
-          )
-          VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING
-            id,
-            workspace_id,
-            name,
-            slug,
-            description,
-            is_private,
-            created_by,
-            created_at,
-            updated_at
-          `,
-          [
-            workspaceId,
-            name,
-            slug,
-            description ?? null,
-            isPrivate,
-            user.id,
-          ],
-        );
+  const client = await app.db.connect();
 
-        return reply.status(201).send({
-          data: result.rows[0],
-        });
-      } catch (error) {
-        // PostgreSQL unique violation
-        if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "23505"
-        ) {
-          return reply.status(409).send({
-            error: {
-              code: "CHANNEL_SLUG_ALREADY_EXISTS",
-              message:
-                "A channel with this slug already exists in this workspace",
-            },
-          });
-        }
+  try {
+    await client.query("BEGIN");
 
-        throw error;
-      }
+    const result = await client.query(
+      `
+      INSERT INTO channels (
+        workspace_id,
+        name,
+        slug,
+        description,
+        is_private,
+        created_by
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING
+        id,
+        workspace_id,
+        name,
+        slug,
+        description,
+        is_private,
+        created_by,
+        created_at,
+        updated_at
+      `,
+      [
+        workspaceId,
+        name,
+        slug,
+        description ?? null,
+        isPrivate,
+        user.id,
+      ],
+    );
+
+    const channel = result.rows[0];
+
+    // Private channel:
+    // creator automatically becomes a channel member.
+    if (isPrivate) {
+      await client.query(
+        `
+        INSERT INTO channel_members (
+          channel_id,
+          user_id
+        )
+        VALUES ($1, $2)
+        `,
+        [channel.id, user.id],
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return reply.status(201).send({
+      data: channel,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+} catch (error) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "23505"
+  ) {
+    return reply.status(409).send({
+      error: {
+        code: "CHANNEL_SLUG_ALREADY_EXISTS",
+        message:
+          "A channel with this slug already exists in this workspace",
+      },
+    });
+  }
+
+  throw error;
+}
+
+
     },
   );
 };

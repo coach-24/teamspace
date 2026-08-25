@@ -206,6 +206,156 @@ const channelMembersRoute: FastifyPluginAsync = async (app) => {
       }
     },
   );
+    app.delete(
+    "/api/channels/:channelId/members/:userId",
+    { config: { requiresAuth: true } },
+    async (request, reply) => {
+      // ============================================
+      // Validate params
+      // ============================================
+
+      const paramsSchema = z.object({
+        channelId: z.uuid(),
+        userId: z.uuid(),
+      });
+
+      const parsed = paramsSchema.safeParse(request.params);
+
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "INVALID_PARAMETERS",
+            message: "Channel ID and user ID must be valid UUIDs",
+          },
+        });
+      }
+
+      const { channelId, userId } = parsed.data;
+
+      // ============================================
+      // Find channel
+      // ============================================
+
+      const channelResult = await app.db.query(
+        `
+        SELECT
+          id,
+          workspace_id,
+          is_private
+        FROM channels
+        WHERE id = $1
+        `,
+        [channelId],
+      );
+
+      const channel = channelResult.rows[0];
+
+      if (!channel) {
+        return reply.status(404).send({
+          error: {
+            code: "CHANNEL_NOT_FOUND",
+            message: "Channel not found",
+          },
+        });
+      }
+
+      // ============================================
+      // Verify requester workspace membership
+      // ============================================
+
+      const requesterMembership =
+        await getWorkspaceMembership(
+          app,
+          request,
+          channel.workspace_id,
+        );
+
+      if (!requesterMembership) {
+        return reply.status(403).send({
+          error: {
+            code: "WORKSPACE_ACCESS_DENIED",
+            message: "You are not a member of this workspace",
+          },
+        });
+      }
+
+      // ============================================
+      // Only OWNER / ADMIN can remove members
+      // ============================================
+
+      if (
+        requesterMembership.role !== "OWNER" &&
+        requesterMembership.role !== "ADMIN"
+      ) {
+        return reply.status(403).send({
+          error: {
+            code: "INSUFFICIENT_PERMISSIONS",
+            message:
+              "Only workspace owners and admins can manage channel members",
+          },
+        });
+      }
+
+      // ============================================
+      // Prevent removing the channel creator
+      // ============================================
+
+      const creatorResult = await app.db.query(
+        `
+        SELECT created_by
+        FROM channels
+        WHERE id = $1
+        `,
+        [channelId],
+      );
+
+      const creatorId = creatorResult.rows[0]?.created_by;
+
+      if (creatorId === userId) {
+        return reply.status(400).send({
+          error: {
+            code: "CHANNEL_CREATOR_CANNOT_BE_REMOVED",
+            message:
+              "The channel creator cannot be removed from the channel",
+          },
+        });
+      }
+
+      // ============================================
+      // Remove channel member
+      // ============================================
+
+      const result = await app.db.query(
+        `
+        DELETE FROM channel_members
+        WHERE channel_id = $1
+          AND user_id = $2
+        RETURNING
+          id,
+          channel_id,
+          user_id,
+          joined_at
+        `,
+        [channelId, userId],
+      );
+
+      if (result.rowCount === 0) {
+        return reply.status(404).send({
+          error: {
+            code: "CHANNEL_MEMBER_NOT_FOUND",
+            message: "User is not a member of this channel",
+          },
+        });
+      }
+
+      return {
+        data: {
+          removed: true,
+          membership: result.rows[0],
+        },
+      };
+    },
+  );
 };
 
 export default channelMembersRoute;
