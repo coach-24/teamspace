@@ -32,6 +32,7 @@ import searchMessagesRoute from "./routes/search-messages.js";
 
 import createReplyRoute from "./routes/messages/create-reply.js";
 import repliesRoute from "./routes/messages/replies.js";
+import reactionsRoute from "./routes/messages/reactions.js";
 
 
 import uploadAttachmentRoute from "./routes/messages/upload-attachment.js";
@@ -116,10 +117,11 @@ export const buildApp = async () => {
   app.register(searchMessagesRoute);
   app.register(createReplyRoute);
   app.register(repliesRoute);
+  app.register(reactionsRoute);
   app.register(uploadAttachmentRoute);
   app.register(downloadAttachmentRoute);
   app.register(presenceRoute);
   app.register(searchUsersRoute);
-  
+
   return app;
 };
