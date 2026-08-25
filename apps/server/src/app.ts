@@ -7,6 +7,7 @@ import channelsRoute from "./routes/workspaces/channels.js";
 import messagesRoute from "./routes/channels/messages.js";
 import createMessageRoute from "./routes/channels/create-message.js";
 import authPlugin from "./plugins/auth.js";
+import membersRoute from "./routes/workspaces/members.js";
 
 export const buildApp = () => {
   const app = Fastify({
@@ -53,6 +54,7 @@ export const buildApp = () => {
   app.register(workspaceRoute);
   app.register(workspaceDetailRoute);
   app.register(channelsRoute);
+  app.register(membersRoute);
   app.register(messagesRoute);
   app.register(createMessageRoute);
 

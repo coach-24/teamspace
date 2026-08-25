@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { getWorkspaceMembership } from "../../utils/workspace-auth.js";
 
 const workspaceParamsSchema = z.object({
   workspaceId: z.uuid(),
@@ -22,6 +23,21 @@ const channelsRoute: FastifyPluginAsync = async (app) => {
       }
 
       const { workspaceId } = parsed.data;
+
+      const membership = await getWorkspaceMembership(
+        app,
+        request,
+        workspaceId,
+      );
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: {
+            code: "WORKSPACE_ACCESS_DENIED",
+            message: "You are not a member of this workspace",
+          },
+        });
+      }
 
       const result = await app.db.query(
         `
