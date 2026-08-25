@@ -1,25 +1,22 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { connectionManager } from "../../realtime/connection-manager.js";
 
 const paramsSchema = z.object({
   messageId: z.uuid(),
 });
 
-const bodySchema = z.object({
-  content: z.string().trim().min(1).max(4000),
-});
-
-const editMessageRoute: FastifyPluginAsync = async (app) => {
-  app.patch(
-    "/api/messages/:messageId",
+const markMessageReadRoute: FastifyPluginAsync = async (app) => {
+  app.post(
+    "/api/messages/:messageId/read",
     { config: { requiresAuth: true } },
     async (request, reply) => {
       // ============================================
-      // Validate parameters
+      // Validate message ID
       // ============================================
 
-      const parsedParams = paramsSchema.safeParse(request.params);
+      const parsedParams = paramsSchema.safeParse(
+        request.params,
+      );
 
       if (!parsedParams.success) {
         return reply.status(400).send({
@@ -30,21 +27,7 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
         });
       }
 
-      // ============================================
-      // Validate body
-      // ============================================
-
-      const parsedBody = bodySchema.safeParse(request.body);
-
-      if (!parsedBody.success) {
-        return reply.status(400).send({
-          error: {
-            code: "INVALID_MESSAGE",
-            message:
-              "Message content must be between 1 and 4000 characters",
-          },
-        });
-      }
+      const { messageId } = parsedParams.data;
 
       // ============================================
       // Authentication
@@ -60,9 +43,6 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
           },
         });
       }
-
-      const { messageId } = parsedParams.data;
-      const { content } = parsedBody.data;
 
       // ============================================
       // Resolve TeamSpace user
@@ -90,7 +70,7 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
       }
 
       // ============================================
-      // Find message
+      // Find message + channel
       // ============================================
 
       const messageResult = await app.db.query(
@@ -98,7 +78,6 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
         SELECT
           m.id,
           m.channel_id,
-          m.sender_id,
           c.workspace_id,
           c.is_private
         FROM messages m
@@ -121,19 +100,6 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
       }
 
       // ============================================
-      // Message ownership
-      // ============================================
-
-      if (message.sender_id !== user.id) {
-        return reply.status(403).send({
-          error: {
-            code: "MESSAGE_EDIT_DENIED",
-            message: "You can only edit your own messages",
-          },
-        });
-      }
-
-      // ============================================
       // Workspace membership
       // ============================================
 
@@ -151,7 +117,8 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
         return reply.status(403).send({
           error: {
             code: "NOT_WORKSPACE_MEMBER",
-            message: "User is not a member of this workspace",
+            message:
+              "User is not a member of this workspace",
           },
         });
       }
@@ -161,15 +128,16 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
       // ============================================
 
       if (message.is_private) {
-        const channelMemberResult = await app.db.query(
-          `
-          SELECT id
-          FROM channel_members
-          WHERE channel_id = $1
-            AND user_id = $2
-          `,
-          [message.channel_id, user.id],
-        );
+        const channelMemberResult =
+          await app.db.query(
+            `
+            SELECT id
+            FROM channel_members
+            WHERE channel_id = $1
+              AND user_id = $2
+            `,
+            [message.channel_id, user.id],
+          );
 
         if (channelMemberResult.rowCount === 0) {
           return reply.status(403).send({
@@ -183,42 +151,34 @@ const editMessageRoute: FastifyPluginAsync = async (app) => {
       }
 
       // ============================================
-      // Update message
+      // Create/update read receipt
       // ============================================
 
-      const updatedMessageResult = await app.db.query(
-  `
-  UPDATE messages
-  SET
-    content = $1,
-    updated_at = NOW()
-  WHERE id = $2
-  RETURNING
-    id,
-    channel_id,
-    sender_id,
-    content,
-    created_at,
-    updated_at
-  `,
-  [content, messageId],
-);
+      const receiptResult = await app.db.query(
+        `
+        INSERT INTO message_read_receipts (
+          message_id,
+          user_id,
+          read_at
+        )
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (message_id, user_id)
+        DO UPDATE SET
+          read_at = NOW()
+        RETURNING
+          id,
+          message_id,
+          user_id,
+          read_at
+        `,
+        [messageId, user.id],
+      );
 
-const updatedMessage = updatedMessageResult.rows[0];
-
-connectionManager.broadcastToChannel(
-  updatedMessage.channel_id,
-  {
-    type: "message.updated",
-    data: updatedMessage,
-  },
-);
-
-return {
-  data: updatedMessage,
-};
+      return {
+        data: receiptResult.rows[0],
+      };
     },
   );
 };
 
-export default editMessageRoute;
+export default markMessageReadRoute;

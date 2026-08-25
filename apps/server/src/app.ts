@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import websocketRoute from "./routes/websocket.js";
 import databasePlugin from "./plugins/database.js";
 import healthRoute from "./routes/health.js";
 import workspaceRoute from "./routes/workspaces/index.js";
@@ -9,11 +10,15 @@ import createMessageRoute from "./routes/channels/create-message.js";
 import editMessageRoute from "./routes/channels/edit-message.js";
 import deleteMessageRoute from "./routes/channels/delete-message.js";
 
+
+
 import authPlugin from "./plugins/auth.js";
 import membersRoute from "./routes/workspaces/members.js";
 import channelRoute from "./routes/channels/channel.js";
+import updateChannelRoute from "./routes/channels/update-channel.js";
 import channelMembersRoute from "./routes/channels/members.js";
-
+import updateChannelPrivacyRoute from "./routes/channels/update-channel-privacy.js";
+import markMessageReadRoute from "./routes/channels/mark-message-read.js";
 
 export const buildApp = () => {
   const app = Fastify({
@@ -62,11 +67,15 @@ export const buildApp = () => {
   app.register(channelsRoute);
   app.register(membersRoute);
   app.register(channelRoute);
+  app.register(updateChannelRoute);
+  app.register(updateChannelPrivacyRoute);
   app.register(channelMembersRoute);
   app.register(messagesRoute);
   app.register(createMessageRoute);
   app.register(editMessageRoute);
   app.register(deleteMessageRoute);
+  app.register(websocketRoute);
+  app.register(markMessageReadRoute);
 
   return app;
 };

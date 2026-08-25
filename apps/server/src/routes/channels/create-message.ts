@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { connectionManager } from "../../realtime/connection-manager.js";
 import { z } from "zod";
 
 const paramsSchema = z.object({
@@ -184,9 +185,18 @@ const createMessageRoute: FastifyPluginAsync = async (app) => {
         `,
         [channelId, userId, content],
       );
+      const message = messageResult.rows[0];
+
+      connectionManager.broadcastToChannel(
+        channelId,
+        {
+          type: "message.created",
+          data: message,
+        },
+      );
 
       return reply.status(201).send({
-        data: messageResult.rows[0],
+        data: message,
       });
     },
   );

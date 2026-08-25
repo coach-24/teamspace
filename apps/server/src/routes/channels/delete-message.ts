@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { connectionManager } from "../../realtime/connection-manager.js";
 
 const paramsSchema = z.object({
   messageId: z.uuid(),
@@ -165,14 +166,25 @@ const deleteMessageRoute: FastifyPluginAsync = async (app) => {
       // ============================================
 
       await app.db.query(
-        `
-        DELETE FROM messages
-        WHERE id = $1
-        `,
-        [messageId],
-      );
+    `
+    DELETE FROM messages
+    WHERE id = $1
+    `,
+    [messageId],
+    );
 
-      return reply.status(204).send();
+    connectionManager.broadcastToChannel(
+    message.channel_id,
+    {
+        type: "message.deleted",
+        data: {
+        id: message.id,
+        channel_id: message.channel_id,
+        },
+    },
+    );
+
+    return reply.status(204).send();
     },
   );
 };
