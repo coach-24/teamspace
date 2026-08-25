@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
+import { connectionManager } from "../../realtime/connection-manager.js";
 import { z } from "zod";
 
 const paramsSchema = z.object({
@@ -174,9 +175,23 @@ const markMessageReadRoute: FastifyPluginAsync = async (app) => {
         [messageId, user.id],
       );
 
-      return {
-        data: receiptResult.rows[0],
-      };
+      const receipt = receiptResult.rows[0];
+
+connectionManager.broadcastToChannel(
+  message.channel_id,
+  {
+    type: "message.read",
+    data: {
+      message_id: receipt.message_id,
+      user_id: receipt.user_id,
+      read_at: receipt.read_at,
+    },
+  },
+);
+
+return {
+  data: receipt,
+};
     },
   );
 };

@@ -19,6 +19,10 @@ import updateChannelRoute from "./routes/channels/update-channel.js";
 import channelMembersRoute from "./routes/channels/members.js";
 import updateChannelPrivacyRoute from "./routes/channels/update-channel-privacy.js";
 import markMessageReadRoute from "./routes/channels/mark-message-read.js";
+import notificationsRoute from "./routes/notifications.js";
+import notificationsReadRoute from "./routes/notifications-read.js";
+import notificationsUnreadCountRoute from "./routes/notifications-unread-count.js";
+
 
 export const buildApp = () => {
   const app = Fastify({
@@ -74,6 +78,9 @@ export const buildApp = () => {
   app.register(createMessageRoute);
   app.register(editMessageRoute);
   app.register(deleteMessageRoute);
+  app.register(notificationsRoute);
+  app.register(notificationsReadRoute);
+  app.register(notificationsUnreadCountRoute);
   app.register(websocketRoute);
   app.register(markMessageReadRoute);
 

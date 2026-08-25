@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { connectionManager } from "../../realtime/connection-manager.js";
+import { createNotification } from "../../services/notification-service.js";
 import { z } from "zod";
 
 const paramsSchema = z.object({
@@ -19,7 +20,9 @@ const createMessageRoute: FastifyPluginAsync = async (app) => {
       // Validate params
       // ============================================
 
-      const parsedParams = paramsSchema.safeParse(request.params);
+      const parsedParams = paramsSchema.safeParse(
+        request.params,
+      );
 
       if (!parsedParams.success) {
         return reply.status(400).send({
@@ -34,7 +37,9 @@ const createMessageRoute: FastifyPluginAsync = async (app) => {
       // Validate body
       // ============================================
 
-      const parsedBody = bodySchema.safeParse(request.body);
+      const parsedBody = bodySchema.safeParse(
+        request.body,
+      );
 
       if (!parsedBody.success) {
         return reply.status(400).send({
@@ -45,6 +50,10 @@ const createMessageRoute: FastifyPluginAsync = async (app) => {
           },
         });
       }
+
+      // ============================================
+      // Authentication
+      // ============================================
 
       const authUserId = request.user?.id;
 
@@ -132,7 +141,8 @@ const createMessageRoute: FastifyPluginAsync = async (app) => {
         return reply.status(403).send({
           error: {
             code: "NOT_WORKSPACE_MEMBER",
-            message: "User is not a member of this workspace",
+            message:
+              "User is not a member of this workspace",
           },
         });
       }
@@ -142,15 +152,16 @@ const createMessageRoute: FastifyPluginAsync = async (app) => {
       // ============================================
 
       if (channel.is_private) {
-        const channelMemberResult = await app.db.query(
-          `
-          SELECT id
-          FROM channel_members
-          WHERE channel_id = $1
-            AND user_id = $2
-          `,
-          [channelId, userId],
-        );
+        const channelMemberResult =
+          await app.db.query(
+            `
+            SELECT id
+            FROM channel_members
+            WHERE channel_id = $1
+              AND user_id = $2
+            `,
+            [channelId, userId],
+          );
 
         if (channelMemberResult.rowCount === 0) {
           return reply.status(403).send({
@@ -185,7 +196,100 @@ const createMessageRoute: FastifyPluginAsync = async (app) => {
         `,
         [channelId, userId, content],
       );
+
       const message = messageResult.rows[0];
+
+      // ============================================
+      // Detect @mentions
+      // ============================================
+
+      const mentionMatches = [
+        ...content.matchAll(
+          /@([a-zA-Z0-9_]+)/g,
+        ),
+      ];
+
+      const mentionedNames = [
+        ...new Set(
+          mentionMatches
+            .map((match) => match[1])
+            .filter(
+              (name): name is string =>
+                typeof name === "string",
+            ),
+        ),
+      ];
+
+      if (mentionedNames.length > 0) {
+        const mentionedUsersResult =
+          await app.db.query(
+            `
+            SELECT
+              u.id,
+              u.display_name
+            FROM users u
+            INNER JOIN memberships m
+              ON m.user_id = u.id
+            WHERE m.workspace_id = $1
+              AND LOWER(u.display_name) = ANY($2::text[])
+            `,
+            [
+              channel.workspace_id,
+              mentionedNames.map((name) =>
+                name.toLowerCase(),
+              ),
+            ],
+          );
+
+        for (const mentionedUser of
+          mentionedUsersResult.rows) {
+          // Never notify yourself
+          if (mentionedUser.id === userId) {
+            continue;
+          }
+
+          // Private channels require
+          // channel membership
+          if (channel.is_private) {
+            const channelMemberResult =
+              await app.db.query(
+                `
+                SELECT id
+                FROM channel_members
+                WHERE channel_id = $1
+                  AND user_id = $2
+                `,
+                [
+                  channelId,
+                  mentionedUser.id,
+                ],
+              );
+
+            if (
+              channelMemberResult.rowCount ===
+              0
+            ) {
+              continue;
+            }
+          }
+
+          await createNotification(app.db, {
+            userId: mentionedUser.id,
+            type: "mention",
+            messageId: message.id,
+            channelId,
+            actorId: userId,
+            data: {
+              display_name:
+                mentionedUser.display_name,
+            },
+          });
+        }
+      }
+
+      // ============================================
+      // Broadcast message
+      // ============================================
 
       connectionManager.broadcastToChannel(
         channelId,
